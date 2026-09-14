@@ -30,6 +30,9 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" build/Atoll-unsigned.zip
           tar -czf build/Atoll-unsigned.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
+          VERIFY_DIR=$(mktemp -d "$RUNNER_TEMP/atoll-verify.XXXXXX")
+          tar -xzf build/Atoll-unsigned.tar.gz -C "$VERIFY_DIR"
+          codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/Atoll.app"
           shasum -a 256 build/Atoll-unsigned.zip build/Atoll-unsigned.tar.gz > build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
