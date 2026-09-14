@@ -2279,9 +2279,10 @@ struct ContentView: View {
         }
     }
 
-    /// Keeps the open notch visible after hover exit and closes it on an outside click.
-    /// Both monitors are needed because AppKit separates clicks outside and inside the
-    /// application's own windows.
+    /// Keeps the open notch visible after hover exit and closes it on a click
+    /// delivered to another application. Events delivered to Atoll are already
+    /// inside one of its windows, so they must not pass through this close path;
+    /// AX-generated clicks may not carry a reliable global mouse location.
     private func startOutsideClickMonitor() {
         guard vm.notchState == .open else { return }
         guard outsideClickMonitor == nil else { return }
@@ -2297,10 +2298,6 @@ struct ContentView: View {
 
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { event in
             handleClick(self.screenPoint(for: event))
-        }
-        outsideClickLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
-            handleClick(self.screenPoint(for: event))
-            return event
         }
     }
 
