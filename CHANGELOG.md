@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Wider Dynamic Island notes editor**: increased the standard expanded width to 800pt, reserved a readable width for Notes and Clipboard tabs, and unified the SwiftUI/window sizing path so editor content is not clipped. Removed gesture-driven blur from tab content so text and controls stay sharp during redraws.
+
 ### Added
 - **Connection status HUDs**: Atoll now shows a Dynamic Island HUD when the Mac goes offline, and a compact inline HUD when it connects to Wi-Fi or Personal Hotspot, using the matching Wi-Fi or hotspot symbol and the connected network name. (#827)
 - **Pin lyrics under the closed notch**: a pin button in the Lyrics panel keeps the line being sung visible after the notch closes, so a song can be followed without holding the pointer over the notch. The strip is drawn as an overlay on padding rather than as a row in the notch stack, so it never widens the panel or shifts the music row. Off by default, and inert unless lyrics are enabled.

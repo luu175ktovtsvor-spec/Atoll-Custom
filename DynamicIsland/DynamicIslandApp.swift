@@ -562,7 +562,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         // Use minimalistic or normal size based on settings
-        var baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: vm.screen)) : openNotchSize
+        var baseSize = expandedContentSize(for: vm.screen, currentView: coordinator.currentView)
         
         // Use a consistent height for different view types
         if coordinator.currentView == .timer {

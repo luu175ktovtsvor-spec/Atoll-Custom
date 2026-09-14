@@ -1,12 +1,18 @@
 name: Unsigned macOS Package
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
-permissions: { contents: write }
+
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build unsigned package
     runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
@@ -18,7 +24,13 @@ jobs:
           APP=$(find build/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" build/Atoll-unsigned.zip
+          tar -czf build/Atoll-unsigned.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
+          shasum -a 256 build/Atoll-unsigned.zip build/Atoll-unsigned.tar.gz > build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Atoll-unsigned
-          path: build/Atoll-unsigned.zip
+          path: |
+            build/Atoll-unsigned.zip
+            build/Atoll-unsigned.tar.gz
+            build/SHA256SUMS.txt
+          retention-days: 30

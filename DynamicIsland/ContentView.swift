@@ -108,7 +108,7 @@ struct ContentView: View {
     
     // Dynamic sizing based on view type and graph count with smooth transitions
     var dynamicNotchSize: CGSize {
-        let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: isDynamicIslandMode) : openNotchSize
+        let baseSize = expandedContentSize(for: currentScreenName, currentView: coordinator.currentView)
 
         if isConnectivityHUDVisible,
            let connectivitySize = NetworkConnectivityHUDMetrics.size(
@@ -1296,8 +1296,6 @@ struct ContentView: View {
               }
               .zIndex(1)
               .allowsHitTesting(vm.notchState == .open)
-              .blur(radius: abs(gestureProgress) > 0.3 ? min(abs(gestureProgress), 8) : 0)
-              .opacity(abs(gestureProgress) > 0.3 ? min(abs(gestureProgress * 2), 0.8) : 1)
               .animation(.smooth(duration: 0.3), value: coordinator.currentView)
           }
       }

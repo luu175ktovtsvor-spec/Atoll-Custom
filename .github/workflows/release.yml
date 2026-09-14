@@ -39,6 +39,7 @@ jobs:
     # Skip CI-generated commits to prevent infinite loops
     # (appcast/changelog commits pushed by this workflow)
     if: >-
+      github.repository == 'Ebullioscopic/Atoll' &&
       !contains(github.event.head_commit.message, 'ci: update appcast') &&
       !contains(github.event.head_commit.message, 'ci: archive changelog')
 
@@ -46,18 +47,10 @@ jobs:
       # ─────────────────────────────────────────────────────────────────
       # 1. Checkout
       # ─────────────────────────────────────────────────────────────────
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
       # ─────────────────────────────────────────────────────────────────

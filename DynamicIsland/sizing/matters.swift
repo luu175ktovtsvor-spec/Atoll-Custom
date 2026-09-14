@@ -66,12 +66,23 @@ func sideLyricsRequiredNotchWidth() -> CGFloat {
         + SideLyricsLayout.combinedInset
 }
 
-var openNotchSize: CGSize {
+/// Returns the standard expanded notch size for a specific display.
+///
+/// The old implementation always used ``NSScreen.main``. That made a window
+/// on a secondary display inherit the main display's width budget and, more
+/// importantly, left the Notes editor constrained by whichever size happened
+/// to be calculated first. Keep the screen argument in the shared sizing path
+/// so the SwiftUI view and its hosting window resolve the same width.
+func openNotchSize(for screenName: String?) -> CGSize {
     let storedWidth = Defaults[.openNotchWidth]
     let minWidth = currentRecommendedMinimumNotchWidth()
-    let maxWidth = maxAllowedNotchWidth()
+    let maxWidth = maxAllowedNotchWidth(for: screenName)
     let width = min(max(storedWidth, minWidth, sideLyricsRequiredNotchWidth()), maxWidth)
     return .init(width: width, height: 200)
+}
+
+var openNotchSize: CGSize {
+    openNotchSize(for: nil)
 }
 
 /// Maximum notch width based on the current screen's point width.
@@ -161,6 +172,14 @@ func enforceMinimumNotchWidth() {
     }
 }
 private let minimalisticBaseOpenNotchSize: CGSize = .init(width: 420, height: 180)
+/// Minimum width for the compact pill on a display without a physical notch.
+/// This leaves room for the player controls without making the pill fill the
+/// entire display.
+let dynamicIslandMinimalisticMinimumWidth: CGFloat = 560
+/// Minimum canvas for Notes and Clipboard. Their toolbar and editor need more
+/// room than the compact music player, even when the user stored a narrower
+/// standard width in older versions.
+let notesEditorMinimumWidth: CGFloat = 800
 private let minimalisticLyricsExtraHeight: CGFloat = 40
 let minimalisticTimerCountdownTopPadding: CGFloat = 12
 let minimalisticTimerCountdownContentHeight: CGFloat = 82
@@ -175,7 +194,9 @@ func minimalisticOpenNotchSize(isDynamicIslandMode: Bool) -> CGSize {
     var size = minimalisticBaseOpenNotchSize
 
     if isDynamicIslandMode {
-        size.width = 340 // Reduced from 420 for a narrower pill
+        // Keep the compact player balanced, while leaving enough horizontal
+        // room for notes and other full-width tabs on Dynamic Island screens.
+        size.width = dynamicIslandMinimalisticMinimumWidth
         size.height = 144 // Exact height of the minimalistic music player view
     }
 
@@ -193,6 +214,33 @@ func minimalisticOpenNotchSize(isDynamicIslandMode: Bool) -> CGSize {
         size.height += minimalisticTimerCountdownBlockHeight
     }
 
+    return size
+}
+
+/// One width source for the SwiftUI content, view model and hosting window.
+/// Keeping this in the sizing module prevents the three callers from drifting
+/// apart again when a tab needs more room than the music player.
+@MainActor
+func expandedContentSize(for screenName: String?, currentView: NotchViews) -> CGSize {
+    let dynamicIsland = shouldUseDynamicIslandMode(for: screenName)
+    let minimalistic = Defaults[.enableMinimalisticUI]
+    var size = minimalistic
+        ? minimalisticOpenNotchSize(isDynamicIslandMode: dynamicIsland)
+        : openNotchSize(for: screenName)
+
+    var minimumWidth: CGFloat = 0
+    if minimalistic && dynamicIsland {
+        minimumWidth = dynamicIslandMinimalisticMinimumWidth
+    }
+    if currentView == .notes || currentView == .clipboard {
+        minimumWidth = max(minimumWidth, notesEditorMinimumWidth)
+    }
+
+    guard minimumWidth > 0 else { return size }
+    size.width = min(
+        max(size.width, minimumWidth),
+        maxAllowedNotchWidth(for: screenName)
+    )
     return size
 }
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))

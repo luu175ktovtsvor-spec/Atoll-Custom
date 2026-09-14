@@ -5410,7 +5410,8 @@ struct Appearance: View {
         Section {
             let recommendedMin = currentRecommendedMinimumNotchWidth()
             let tabCount = enabledStandardTabCount()
-            let dynamicRange = Double(recommendedMin)...900
+            let maximumWidth = maxAllowedNotchWidth()
+            let dynamicRange = Double(min(recommendedMin, maximumWidth))...Double(maximumWidth)
             
             let closedRange = Double(80)...400
             let minimalisticRange = Double(250)...600
