@@ -2286,20 +2286,20 @@ struct ContentView: View {
         guard vm.notchState == .open else { return }
         guard outsideClickMonitor == nil else { return }
 
-        let handleClick: @Sendable () -> Void = { [weak vm] in
+        let handleClick: @Sendable (NSPoint) -> Void = { [weak vm] clickLocation in
             Task { @MainActor in
                 guard let vm, vm.notchState == .open else { return }
-                guard !self.isPointInsideNotchWindow() else { return }
+                guard !self.isPointInsideNotchWindow(clickLocation) else { return }
                 guard !self.shouldPreventOutsideClickClose() else { return }
                 vm.close()
             }
         }
 
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { _ in
-            handleClick()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { event in
+            handleClick(self.screenPoint(for: event))
         }
         outsideClickLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
-            handleClick()
+            handleClick(self.screenPoint(for: event))
             return event
         }
     }
@@ -2333,10 +2333,10 @@ struct ContentView: View {
 
     private func installStickyTerminalClickMonitor() {
         guard stickyTerminalClickMonitor == nil else { return }
-        stickyTerminalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak vm] _ in
+        stickyTerminalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak vm] event in
+            let clickLocation = self.screenPoint(for: event)
             Task { @MainActor in
                 guard let vm, vm.notchState == .open else { return }
-                let clickLocation = NSEvent.mouseLocation
                 if self.isPointInsideNotchWindow(clickLocation) {
                     return
                 }
@@ -2495,6 +2495,18 @@ struct ContentView: View {
         }
 
         return NSApp.windows.contains(where: { frameContainsPointIncludingTopEdge($0.frame, point) })
+    }
+
+    /// AX-generated clicks can leave ``NSEvent.mouseLocation`` one event behind.
+    /// Resolve the event's own window-relative location first so an in-notch
+    /// button is never mistaken for an outside click.
+    private func screenPoint(for event: NSEvent) -> NSPoint {
+        if let eventWindow = event.window {
+            return eventWindow.convertToScreen(
+                NSRect(origin: event.locationInWindow, size: .zero)
+            ).origin
+        }
+        return NSEvent.mouseLocation
     }
 
     /// `CGRect.contains` is half-open on max edges; the top pixel needs inclusive maxY.
