@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **Wider Dynamic Island notes editor**: increased the standard expanded width to 800pt, reserved a readable width for Notes and Clipboard tabs, and unified the SwiftUI/window sizing path so editor content is not clipped. Removed gesture-driven blur from tab content so text and controls stay sharp during redraws.
+- **Stable Dynamic Island presentation**: kept the existing horizontal footprint, added a small downward extension to the expanded surface, and limited the blur effect to active interaction transitions so it cannot remain stuck after a gesture.
 
 ### Added
 - **Connection status HUDs**: Atoll now shows a Dynamic Island HUD when the Mac goes offline, and a compact inline HUD when it connects to Wi-Fi or Personal Hotspot, using the matching Wi-Fi or hotspot symbol and the connected network name. (#827)

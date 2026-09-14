@@ -562,21 +562,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         // Use minimalistic or normal size based on settings
-        var baseSize = expandedContentSize(for: vm.screen, currentView: coordinator.currentView)
+        var baseSize = Defaults[.enableMinimalisticUI]
+            ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: vm.screen))
+            : openNotchSize
+        baseSize.height += openNotchVerticalExtension
         
         // Use a consistent height for different view types
         if coordinator.currentView == .timer {
-            baseSize.height = 250 // Extra space for timer presets
+            baseSize.height = 250 + openNotchVerticalExtension // Extra space for timer presets
         } else if coordinator.currentView == .notes {
             let preferredHeight = coordinator.notesLayoutState.preferredHeight
-            baseSize.height = max(baseSize.height, preferredHeight)
+            baseSize.height = max(baseSize.height, preferredHeight + openNotchVerticalExtension)
         } else if coordinator.currentView == .clipboard {
             // Clipboard has its own fixed height source; don't inherit the notes layout state.
-            baseSize.height = max(baseSize.height, NotesLayoutState.list.preferredHeight)
+            baseSize.height = max(baseSize.height, NotesLayoutState.list.preferredHeight + openNotchVerticalExtension)
         } else if coordinator.currentView == .terminal {
             let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
             let maxFraction = Defaults[.terminalMaxHeightFraction]
-            baseSize.height = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction))
+            baseSize.height = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction)) + openNotchVerticalExtension
         }
         
         baseSize = inlineLyricsAdjustedNotchSize(

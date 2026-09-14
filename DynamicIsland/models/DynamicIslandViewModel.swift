@@ -419,11 +419,14 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
     }
     
     private func calculateDynamicNotchSize() -> CGSize {
-        var adjustedSize = expandedContentSize(for: screen, currentView: coordinator.currentView)
+        var adjustedSize = Defaults[.enableMinimalisticUI]
+            ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen))
+            : openNotchSize
+        adjustedSize.height += openNotchVerticalExtension
 
         if coordinator.currentView == .notes || coordinator.currentView == .clipboard {
             let preferred = coordinator.notesLayoutState.preferredHeight
-            adjustedSize.height = max(adjustedSize.height, preferred)
+            adjustedSize.height = max(adjustedSize.height, preferred + openNotchVerticalExtension)
             return adjustedSize
         }
 

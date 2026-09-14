@@ -108,7 +108,10 @@ struct ContentView: View {
     
     // Dynamic sizing based on view type and graph count with smooth transitions
     var dynamicNotchSize: CGSize {
-        let baseSize = expandedContentSize(for: currentScreenName, currentView: coordinator.currentView)
+        var baseSize = Defaults[.enableMinimalisticUI]
+            ? minimalisticOpenNotchSize(isDynamicIslandMode: isDynamicIslandMode)
+            : openNotchSize
+        baseSize.height += openNotchVerticalExtension
 
         if isConnectivityHUDVisible,
            let connectivitySize = NetworkConnectivityHUDMetrics.size(
@@ -186,19 +189,19 @@ struct ContentView: View {
         }
         
         if coordinator.currentView == .timer {
-            return CGSize(width: baseSize.width, height: 250) // Extra height for timer presets
+            return CGSize(width: baseSize.width, height: 250 + openNotchVerticalExtension) // Extra height for timer presets
         }
         
         if coordinator.currentView == .notes {
             let preferredHeight = coordinator.notesLayoutState.preferredHeight
-            let resolvedHeight = max(baseSize.height, preferredHeight)
+            let resolvedHeight = max(baseSize.height, preferredHeight + openNotchVerticalExtension)
             return CGSize(width: baseSize.width, height: resolvedHeight)
         }
 
         if coordinator.currentView == .clipboard {
             // Clipboard has its own fixed height source; don't inherit whatever notes
             // layout state happens to be set.
-            let resolvedHeight = max(baseSize.height, NotesLayoutState.list.preferredHeight)
+            let resolvedHeight = max(baseSize.height, NotesLayoutState.list.preferredHeight + openNotchVerticalExtension)
             return CGSize(width: baseSize.width, height: resolvedHeight)
         }
 
@@ -206,7 +209,7 @@ struct ContentView: View {
             // Dynamic height: up to terminalMaxHeightFraction of screen, min 300pt
             let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
             let maxFraction = Defaults[.terminalMaxHeightFraction]
-            let terminalHeight = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction))
+            let terminalHeight = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction)) + openNotchVerticalExtension
             return CGSize(width: baseSize.width, height: terminalHeight)
         }
 
@@ -253,6 +256,7 @@ struct ContentView: View {
     @State private var isHoveringClosedMusicWaveformControl: Bool = false
 
     @State private var gestureProgress: CGFloat = .zero
+    @State private var gestureProgressResetTask: Task<Void, Never>?
     @State private var skipGestureActiveDirection: MusicManager.SkipDirection?
     @State private var isMusicControlWindowVisible = false
     @State private var pendingMusicControlTask: Task<Void, Never>?
@@ -363,6 +367,19 @@ struct ContentView: View {
 
     private var notchBottomPadding: CGFloat {
         currentShadowPadding + bodyHoverAreaPadding
+    }
+
+    /// Blur is an interaction affordance, not a permanent rendering mode.
+    /// It is only active while an open-panel close gesture is moving; the
+    /// gesture watchdog below clears the progress if AppKit drops its end event.
+    private var interactionBlurRadius: CGFloat {
+        guard vm.notchState == .open, abs(gestureProgress) > 0.3 else { return 0 }
+        return min(abs(gestureProgress), 8)
+    }
+
+    private var interactionContentOpacity: Double {
+        guard vm.notchState == .open, abs(gestureProgress) > 0.3 else { return 1 }
+        return min(abs(gestureProgress * 2), 0.8)
     }
 
     private var pillTopOffset: CGFloat {
@@ -768,6 +785,7 @@ struct ContentView: View {
                 }
             })
             .onChange(of: vm.notchState) { _, newState in
+                resetGestureProgress()
                 // Update smart monitoring based on notch state
                 if enableStatsFeature {
                     let currentViewString = coordinator.currentView == .stats ? "stats" : "other"
@@ -807,6 +825,7 @@ struct ContentView: View {
                 }
             }
             .onChange(of: coordinator.currentView) { _, newValue in
+                resetGestureProgress()
                 if enableStatsFeature {
                     let currentViewString = newValue == .stats ? "stats" : "other"
                     statsManager.updateMonitoringState(
@@ -1296,6 +1315,8 @@ struct ContentView: View {
               }
               .zIndex(1)
               .allowsHitTesting(vm.notchState == .open)
+              .blur(radius: interactionBlurRadius)
+              .opacity(interactionContentOpacity)
               .animation(.smooth(duration: 0.3), value: coordinator.currentView)
           }
       }
@@ -2137,7 +2158,32 @@ struct ContentView: View {
         cancelMusicControlVisibilityTimer()
         clearMusicControlVisibilityDeadline()
         musicControlSuppressionTask?.cancel()
+        resetGestureProgress()
         isHoveringClosedMusicWaveformControl = false
+    }
+
+    /// Arms a short watchdog while a gesture is delivering updates. Trackpad
+    /// cancellation or a view teardown can omit `.ended`; without a watchdog
+    /// the old blur/opacity state would remain on screen indefinitely.
+    private func armGestureProgressReset() {
+        gestureProgressResetTask?.cancel()
+        gestureProgressResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.12)) {
+                gestureProgress = .zero
+            }
+            gestureProgressResetTask = nil
+        }
+    }
+
+    private func resetGestureProgress() {
+        gestureProgressResetTask?.cancel()
+        gestureProgressResetTask = nil
+        guard gestureProgress != .zero else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            gestureProgress = .zero
+        }
     }
 
     private func startHiddenEdgeHoverPolling() {
@@ -2598,6 +2644,10 @@ struct ContentView: View {
     }
 
     private func handleScrollGesture(isDownward: Bool, translation: CGFloat, phase: NSEvent.Phase) {
+        if phase == .ended || phase == .cancelled {
+            resetGestureProgress()
+            return
+        }
         let reverse = Defaults[.reverseScrollGestures]
         let shouldOpen = isDownward ? !reverse : reverse
 
@@ -2610,26 +2660,27 @@ struct ContentView: View {
     }
 
     private func handleOpenScrollGesture(translation: CGFloat, phase: NSEvent.Phase) {
+        if phase == .ended {
+            resetGestureProgress()
+            return
+        }
         guard vm.notchState == .closed else { return }
-        guard !recordingOpenGestureLocked else { return }
+        guard !recordingOpenGestureLocked else {
+            resetGestureProgress()
+            return
+        }
 
         withAnimation(.smooth) {
             gestureProgress = (translation / Defaults[.gestureSensitivity]) * 20
         }
 
-        if phase == .ended {
-            withAnimation(.smooth) {
-                gestureProgress = .zero
-            }
-        }
+        armGestureProgressReset()
 
         if translation > Defaults[.gestureSensitivity] {
             if Defaults[.enableHaptics] {
                 triggerHapticIfAllowed()
             }
-            withAnimation(.smooth) {
-                gestureProgress = .zero
-            }
+            resetGestureProgress()
             openNotch()
         }
     }
@@ -2639,21 +2690,24 @@ struct ContentView: View {
     }
 
     private func handleCloseScrollGesture(translation: CGFloat, phase: NSEvent.Phase) {
-        guard vm.notchState == .open, !vm.isHoveringCalendar, !vm.isScrollGestureActive else { return }
+        if phase == .ended {
+            resetGestureProgress()
+            return
+        }
+        guard vm.notchState == .open, !vm.isHoveringCalendar, !vm.isScrollGestureActive else {
+            resetGestureProgress()
+            return
+        }
 
         withAnimation(.smooth) {
             gestureProgress = (translation / Defaults[.gestureSensitivity]) * -20
         }
 
-        if phase == .ended {
-            withAnimation(.smooth) {
-                gestureProgress = .zero
-            }
-        }
+        armGestureProgressReset()
 
         if translation > Defaults[.gestureSensitivity] {
+            resetGestureProgress()
             withAnimation(.smooth) {
-                gestureProgress = .zero
                 isHovering = false
             }
             vm.close()
