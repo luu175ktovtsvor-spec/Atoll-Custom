@@ -23,6 +23,11 @@ jobs:
           xcodebuild -skipPackagePluginValidation -project DynamicIsland.xcodeproj -scheme DynamicIsland -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
           APP=$(find build/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP"
+          # Xcode's unsigned copy can retain framework resource seals for
+          # headers/modules that are not shipped. Re-sign the complete bundle
+          # ad-hoc so the downloaded artifact is structurally verifiable.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" build/Atoll-unsigned.zip
           tar -czf build/Atoll-unsigned.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
           shasum -a 256 build/Atoll-unsigned.zip build/Atoll-unsigned.tar.gz > build/SHA256SUMS.txt
