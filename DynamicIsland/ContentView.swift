@@ -697,7 +697,7 @@ struct ContentView: View {
     private var configuredMainLayout: some View {
         mainLayoutBase
             .conditionalModifier(!useModernCloseAnimation) { view in
-                let hoverAnimation = Animation.bouncy.speed(1.2)
+                let hoverAnimation = Animation.spring(response: 0.34, dampingFraction: 0.92, blendDuration: 0)
                 let notchStateAnimation = Animation.spring(response: 0.42, dampingFraction: 1.0, blendDuration: 0)
                 return view
                     .animation(hoverAnimation, value: isHovering)
@@ -706,9 +706,9 @@ struct ContentView: View {
                     .transition(.blurReplace.animation(.interactiveSpring(dampingFraction: 1.2)))
             }
             .conditionalModifier(useModernCloseAnimation) { view in
-                let hoverAnimation = Animation.bouncy.speed(1.2)
-                let openAnimation = Animation.spring(response: 0.42, dampingFraction: 1.0, blendDuration: 0)
-                let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
+                let hoverAnimation = Animation.spring(response: 0.34, dampingFraction: 0.92, blendDuration: 0)
+                let openAnimation = Animation.spring(response: 0.36, dampingFraction: 0.92, blendDuration: 0)
+                let closeAnimation = Animation.spring(response: 0.32, dampingFraction: 0.94, blendDuration: 0)
                 let notchAnimation = vm.notchState == .open ? openAnimation : closeAnimation
                 return view
                     .animation(hoverAnimation, value: isHovering)
@@ -2362,7 +2362,7 @@ struct ContentView: View {
         }
 
         if hovering {
-            withAnimation(.bouncy.speed(1.2)) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.92, blendDuration: 0)) {
                 isHovering = true
             }
 
@@ -2415,7 +2415,7 @@ struct ContentView: View {
     }
 
     private func finishHoverExit() {
-        withAnimation(.bouncy.speed(1.2)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.94, blendDuration: 0)) {
             isHovering = false
         }
 
