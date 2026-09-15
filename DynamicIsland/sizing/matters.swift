@@ -174,6 +174,17 @@ let statsGridSpacingHeight: CGFloat = 12
 let notchShadowPaddingStandard: CGFloat = 18
 let notchShadowPaddingMinimalistic: CGFloat = 12
 
+/// The expanded height used by the terminal tab.
+///
+/// Notes uses this same budget so switching between the two tabs does not
+/// make the notch jump between two unrelated vertical sizes.
+func terminalNotchPanelHeight() -> CGFloat {
+    let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
+    let maxFraction = CGFloat(Defaults[.terminalMaxHeightFraction])
+    let fractionHeight = screenHeight * maxFraction
+    return min(fractionHeight, max(300, fractionHeight)) + openNotchVerticalExtension
+}
+
 @MainActor
 func minimalisticOpenNotchSize(isDynamicIslandMode: Bool) -> CGSize {
     var size = minimalisticBaseOpenNotchSize

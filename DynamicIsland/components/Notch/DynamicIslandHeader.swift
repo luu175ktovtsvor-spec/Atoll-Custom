@@ -131,22 +131,6 @@ struct DynamicIslandHeader: View {
                         .buttonStyle(PlainButtonStyle())
                     }
 
-                    // AirDrop quick action. Keep this as a header control rather
-                    // than another tab so the existing tab row and its width stay
-                    // unchanged. It launches Finder's bundled native AirDrop
-                    // surface directly, without relying on a share provider.
-                    Button(action: openAirDrop) {
-                        Capsule()
-                            .fill(.black)
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                headerGlyph("airplayaudio")
-                            }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .accessibilityLabel("AirDrop")
-                    .help("Open AirDrop in Finder")
-                    
                     if Defaults[.enableClipboardManager]
                         && showClipboardIcon
                         && clipboardDisplayMode != .separateTab {
@@ -449,28 +433,6 @@ struct DynamicIslandHeader: View {
 }
 
 private extension DynamicIslandHeader {
-    /// Opens Finder's bundled AirDrop application directly. This avoids both
-    /// synthetic keystrokes and the Automation permission required to control
-    /// System Events.
-    func openAirDrop() {
-        let airDropURL = URL(
-            fileURLWithPath: "/System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app",
-            isDirectory: true
-        )
-
-        guard NSWorkspace.shared.open(airDropURL) else {
-            let message = NSError(
-                domain: "AirDrop",
-                code: 2,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Unable to open AirDrop in Finder."
-                ]
-            )
-            NSAlert.popError(message)
-            return
-        }
-    }
-
     var shouldSuppressStatusIndicators: Bool {
         Defaults[.settingsIconInNotch]
             && Defaults[.enableClipboardManager]

@@ -424,7 +424,13 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
             : openNotchSize
         adjustedSize.height += openNotchVerticalExtension
 
-        if coordinator.currentView == .notes || coordinator.currentView == .clipboard {
+        if coordinator.currentView == .notes {
+            // Notes and Terminal share the same expanded height budget.
+            adjustedSize.height = terminalNotchPanelHeight()
+            return adjustedSize
+        }
+
+        if coordinator.currentView == .clipboard {
             let preferred = coordinator.notesLayoutState.preferredHeight
             adjustedSize.height = max(adjustedSize.height, preferred + openNotchVerticalExtension)
             return adjustedSize

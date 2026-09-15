@@ -193,9 +193,9 @@ struct ContentView: View {
         }
         
         if coordinator.currentView == .notes {
-            let preferredHeight = coordinator.notesLayoutState.preferredHeight
-            let resolvedHeight = max(baseSize.height, preferredHeight + openNotchVerticalExtension)
-            return CGSize(width: baseSize.width, height: resolvedHeight)
+            // Keep the Notes surface as tall as the terminal surface so
+            // switching between the two tabs does not resize the notch.
+            return CGSize(width: baseSize.width, height: terminalNotchPanelHeight())
         }
 
         if coordinator.currentView == .clipboard {
@@ -207,10 +207,7 @@ struct ContentView: View {
 
         if coordinator.currentView == .terminal {
             // Dynamic height: up to terminalMaxHeightFraction of screen, min 300pt
-            let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
-            let maxFraction = Defaults[.terminalMaxHeightFraction]
-            let terminalHeight = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction)) + openNotchVerticalExtension
-            return CGSize(width: baseSize.width, height: terminalHeight)
+            return CGSize(width: baseSize.width, height: terminalNotchPanelHeight())
         }
 
         if coordinator.currentView == .extensionExperience {

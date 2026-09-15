@@ -571,15 +571,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if coordinator.currentView == .timer {
             baseSize.height = 250 + openNotchVerticalExtension // Extra space for timer presets
         } else if coordinator.currentView == .notes {
-            let preferredHeight = coordinator.notesLayoutState.preferredHeight
-            baseSize.height = max(baseSize.height, preferredHeight + openNotchVerticalExtension)
+            // Match the terminal's expanded height so switching tabs keeps a
+            // stable panel size.
+            baseSize.height = terminalNotchPanelHeight()
         } else if coordinator.currentView == .clipboard {
             // Clipboard has its own fixed height source; don't inherit the notes layout state.
             baseSize.height = max(baseSize.height, NotesLayoutState.list.preferredHeight + openNotchVerticalExtension)
         } else if coordinator.currentView == .terminal {
-            let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
-            let maxFraction = Defaults[.terminalMaxHeightFraction]
-            baseSize.height = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction)) + openNotchVerticalExtension
+            baseSize.height = terminalNotchPanelHeight()
         }
         
         baseSize = inlineLyricsAdjustedNotchSize(
