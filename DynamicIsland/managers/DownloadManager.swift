@@ -135,7 +135,21 @@ class DownloadManager {
     private var destinationStampsWhenStarted: [String: Date] = [:]
     
     private var downloadsDirectory: URL? {
-        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        guard let directory = FileManager.default
+            .urls(for: .downloadsDirectory, in: .userDomainMask)
+            .first
+        else { return nil }
+
+        // A LaunchServices-launched accessory can briefly resolve the user
+        // domain to the filesystem root while the login session is settling.
+        // Treat that as unavailable instead of ever scanning `/` (which can
+        // block startup for minutes and is never a valid Downloads directory).
+        let normalized = directory.standardizedFileURL
+        let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+        guard normalized.path == home.appendingPathComponent("Downloads", isDirectory: true).path else {
+            return nil
+        }
+        return normalized
     }
     
     init() {
@@ -533,7 +547,17 @@ class DownloadManager {
 
     private func requestDownloadsPermissionIfNeeded() {
         guard let downloadsDirectory else { return }
-        _ = try? FileManager.default.contentsOfDirectory(at: downloadsDirectory, includingPropertiesForKeys: nil)
+
+        // Permission probing must not run in DownloadManager.init().  The
+        // manager is constructed while AppDelegate is being initialized, so a
+        // synchronous directory read would block the entire UI during launch.
+        let directory = downloadsDirectory
+        queue.async {
+            _ = try? FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            )
+        }
     }
     
     private func updateDownloadingState(isActive: Bool) {
