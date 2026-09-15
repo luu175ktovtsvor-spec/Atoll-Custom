@@ -16,6 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import AppKit
 import Defaults
 import SwiftUI
 
@@ -129,6 +130,23 @@ struct DynamicIslandHeader: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+
+                    // AirDrop quick action.  Keep this as a header control rather
+                    // than another tab so the existing tab row and its width stay
+                    // unchanged.  The action reuses QuickShareService's native
+                    // provider discovery, file picker, security-scoped access,
+                    // and sharing lifecycle handling.
+                    Button(action: openAirDropPicker) {
+                        Capsule()
+                            .fill(.black)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                headerGlyph("airplayaudio")
+                            }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("AirDrop")
+                    .help("Send files with AirDrop")
                     
                     if Defaults[.enableClipboardManager]
                         && showClipboardIcon
@@ -432,6 +450,36 @@ struct DynamicIslandHeader: View {
 }
 
 private extension DynamicIslandHeader {
+    /// Opens the native file picker and sends the selected files with Apple's
+    /// AirDrop sharing service.  Discovery is lazy so adding the header button
+    /// does not add work to Atoll's launch path.
+    func openAirDropPicker() {
+        Task { @MainActor in
+            let quickShare = QuickShareService.shared
+
+            if quickShare.availableProviders.isEmpty {
+                await quickShare.discoverAvailableProviders()
+            }
+
+            guard let airDrop = quickShare.availableProviders.first(where: { $0.id == "AirDrop" }) else {
+                let error = NSError(
+                    domain: "AirDrop",
+                    code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: NSLocalizedString(
+                            "AirDrop service not available",
+                            comment: ""
+                        )
+                    ]
+                )
+                NSAlert.popError(error)
+                return
+            }
+
+            await quickShare.showFilePicker(for: airDrop, from: nil)
+        }
+    }
+
     var shouldSuppressStatusIndicators: Bool {
         Defaults[.settingsIconInNotch]
             && Defaults[.enableClipboardManager]
