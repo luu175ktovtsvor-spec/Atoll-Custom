@@ -131,12 +131,12 @@ struct DynamicIslandHeader: View {
                         .buttonStyle(PlainButtonStyle())
                     }
 
-                    // AirDrop quick action.  Keep this as a header control rather
+                    // AirDrop quick action. Keep this as a header control rather
                     // than another tab so the existing tab row and its width stay
-                    // unchanged.  The action reuses QuickShareService's native
-                    // provider discovery, file picker, security-scoped access,
-                    // and sharing lifecycle handling.
-                    Button(action: openAirDropPicker) {
+                    // unchanged. It opens Finder's native AirDrop surface, which
+                    // also works on systems where NSSharingService does not expose
+                    // a direct AirDrop provider until a file is selected.
+                    Button(action: openAirDrop) {
                         Capsule()
                             .fill(.black)
                             .frame(width: 30, height: 30)
@@ -146,7 +146,7 @@ struct DynamicIslandHeader: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .accessibilityLabel("AirDrop")
-                    .help("Send files with AirDrop")
+                    .help("Open AirDrop in Finder")
                     
                     if Defaults[.enableClipboardManager]
                         && showClipboardIcon
@@ -450,33 +450,32 @@ struct DynamicIslandHeader: View {
 }
 
 private extension DynamicIslandHeader {
-    /// Opens the native file picker and sends the selected files with Apple's
-    /// AirDrop sharing service.  Discovery is lazy so adding the header button
-    /// does not add work to Atoll's launch path.
-    func openAirDropPicker() {
-        Task { @MainActor in
-            let quickShare = QuickShareService.shared
-
-            if quickShare.availableProviders.isEmpty {
-                await quickShare.discoverAvailableProviders()
+    /// Opens Finder's native AirDrop window through its documented keyboard
+    /// shortcut (Command-Shift-R). This keeps the button useful even when the
+    /// sharing-service registry does not publish an AirDrop provider directly.
+    func openAirDrop() {
+        Task {
+            do {
+                try await AppleScriptHelper.executeVoid("""
+                tell application "Finder" to activate
+                tell application "System Events"
+                    tell process "Finder"
+                        keystroke "r" using {command down, shift down}
+                    end tell
+                end tell
+                """)
+            } catch {
+                await MainActor.run {
+                    let message = NSError(
+                        domain: "AirDrop",
+                        code: 2,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Unable to open AirDrop in Finder: \(error.localizedDescription)"
+                        ]
+                    )
+                    NSAlert.popError(message)
+                }
             }
-
-            guard let airDrop = quickShare.availableProviders.first(where: { $0.id == "AirDrop" }) else {
-                let error = NSError(
-                    domain: "AirDrop",
-                    code: 1,
-                    userInfo: [
-                        NSLocalizedDescriptionKey: NSLocalizedString(
-                            "AirDrop service not available",
-                            comment: ""
-                        )
-                    ]
-                )
-                NSAlert.popError(error)
-                return
-            }
-
-            await quickShare.showFilePicker(for: airDrop, from: nil)
         }
     }
 
