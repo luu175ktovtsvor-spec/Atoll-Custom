@@ -133,9 +133,8 @@ struct DynamicIslandHeader: View {
 
                     // AirDrop quick action. Keep this as a header control rather
                     // than another tab so the existing tab row and its width stay
-                    // unchanged. It opens Finder's native AirDrop surface, which
-                    // also works on systems where NSSharingService does not expose
-                    // a direct AirDrop provider until a file is selected.
+                    // unchanged. It launches Finder's bundled native AirDrop
+                    // surface directly, without relying on a share provider.
                     Button(action: openAirDrop) {
                         Capsule()
                             .fill(.black)
@@ -450,32 +449,25 @@ struct DynamicIslandHeader: View {
 }
 
 private extension DynamicIslandHeader {
-    /// Opens Finder's native AirDrop window through its documented keyboard
-    /// shortcut (Command-Shift-R). This keeps the button useful even when the
-    /// sharing-service registry does not publish an AirDrop provider directly.
+    /// Opens Finder's bundled AirDrop application directly. This avoids both
+    /// synthetic keystrokes and the Automation permission required to control
+    /// System Events.
     func openAirDrop() {
-        Task {
-            do {
-                try await AppleScriptHelper.executeVoid("""
-                tell application "Finder" to activate
-                tell application "System Events"
-                    tell process "Finder"
-                        keystroke "r" using {command down, shift down}
-                    end tell
-                end tell
-                """)
-            } catch {
-                await MainActor.run {
-                    let message = NSError(
-                        domain: "AirDrop",
-                        code: 2,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Unable to open AirDrop in Finder: \(error.localizedDescription)"
-                        ]
-                    )
-                    NSAlert.popError(message)
-                }
-            }
+        let airDropURL = URL(
+            fileURLWithPath: "/System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app",
+            isDirectory: true
+        )
+
+        guard NSWorkspace.shared.open(airDropURL) else {
+            let message = NSError(
+                domain: "AirDrop",
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Unable to open AirDrop in Finder."
+                ]
+            )
+            NSAlert.popError(message)
+            return
         }
     }
 
