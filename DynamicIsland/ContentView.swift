@@ -690,16 +690,6 @@ struct ContentView: View {
                 }
             }
             .compositingGroup()
-            .shadow(
-                color: ((vm.notchState == .open || isHovering) && Defaults[.enableShadow])
-                    ? .black.opacity(0.6)
-                    : .clear,
-                radius: Defaults[.cornerRadiusScaling] ? 10 : 5
-            )
-            // Extra horizontal inset for Dynamic Island mode so the shadow
-            // is not clipped by the outer frame constraint
-            .padding(.horizontal, isIslandMode ? dynamicIslandShadowInset : 0)
-            .padding(.bottom, isIslandMode ? dynamicIslandShadowInset : 0)
             .padding(.top, pillTopOffset)
             .accessibilityIdentifier("AtollNotch")
     }
@@ -2430,15 +2420,9 @@ struct ContentView: View {
         }
 
         if vm.notchState == .open {
-            startOutsideClickMonitor()
-        }
-
-        if vm.notchState == .open
-                    && Defaults[.terminalStickyMode]
-                    && coordinator.currentView == .terminal {
-            // Re-sync monitor state through one code path to avoid
-            // monitor lifecycle races between hover and state updates.
-            syncStickyTerminalOutsideClickMonitor()
+            // The island is hover-driven: leaving its active area returns it
+            // to the compact state immediately instead of waiting for a click.
+            vm.close()
         }
     }
 
