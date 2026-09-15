@@ -190,37 +190,49 @@ class DownloadManager {
         destinationStampsWhenStarted.removeAll()
         isDownloading = false
 
+        // Opening an event-only directory descriptor can block while macOS
+        // establishes privacy access for a background accessory app. Do that
+        // work off the main actor, then install the watcher only if the same
+        // monitoring session is still current.
         let path = downloadsDirectory.path
-        let fd = open(path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        
-        let src = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write, .rename, .delete, .attrib],
-            queue: queue
-        )
-        
-        src.setEventHandler { [weak self] in
-            self?.scanDownloadsDirectory(session: session)
+        let monitoringQueue = queue
+        monitoringQueue.async { [weak self] in
+            let fd = open(path, O_EVTONLY)
+            guard fd >= 0 else { return }
+
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.source == nil,
+                      self.monitorSession == session
+                else {
+                    close(fd)
+                    return
+                }
+
+                let src = DispatchSource.makeFileSystemObjectSource(
+                    fileDescriptor: fd,
+                    eventMask: [.write, .rename, .delete, .attrib],
+                    queue: monitoringQueue
+                )
+
+                src.setEventHandler { [weak self] in
+                    self?.scanDownloadsDirectory(session: session)
+                }
+
+                src.setCancelHandler {
+                    close(fd)
+                }
+
+                self.source = src
+                // Queued before the source is resumed, and onto the same
+                // serial queue the event handler runs on, so the baseline is
+                // always the first scan to be delivered.
+                monitoringQueue.async { [weak self] in
+                    self?.scanDownloadsDirectory(session: session)
+                }
+                src.resume()
+            }
         }
-        
-        src.setCancelHandler {
-            close(fd)
-        }
-        
-        source = src
-        // Queued before the source is resumed, and onto the same serial queue
-        // the event handler runs on, so the baseline is always the first scan
-        // to be delivered. Resuming first let a download that appeared during
-        // the baseline's own directory read be processed as a watcher event
-        // while `hasPerformedInitialScan` was still false -- which files it as
-        // pre-existing and ignored, after which the late baseline could drop
-        // it with nothing to notice it again until the next directory event.
-        // It also keeps the directory read off the main actor.
-        queue.async { [weak self] in
-            self?.scanDownloadsDirectory(session: session)
-        }
-        src.resume()
     }
     
     private func stopMonitoring() {
