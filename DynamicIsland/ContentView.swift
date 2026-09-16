@@ -801,6 +801,35 @@ struct ContentView: View {
                     syncStickyTerminalOutsideClickMonitor()
                 }
             }
+            .onChange(of: vm.isBatteryPopoverActive) { _, newPopoverState in
+                runAfter(0.1) {
+                    if !newPopoverState && !isHovering && vm.notchState == .open && !shouldPreventAutoClose() {
+                        vm.close()
+                    }
+                }
+            }
+            .onChange(of: vm.isStatsPopoverActive) { _, newPopoverState in
+                runAfter(0.1) {
+                    if !newPopoverState && !isHovering && vm.notchState == .open && !shouldPreventAutoClose() {
+                        vm.close()
+                    }
+                }
+            }
+            .onChange(of: vm.shouldRecheckHover) { _, _ in
+                // Recheck hover state when a popover or picker closes.
+                runAfter(0.1) {
+                    if vm.notchState == .open && !shouldPreventAutoClose() && !isHovering {
+                        vm.close()
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.sharingDidFinish)) { _ in
+                runAfter(0.1) {
+                    if vm.notchState == .open && !isHovering && !shouldPreventAutoClose() {
+                        vm.close()
+                    }
+                }
+            }
             .onChange(of: coordinator.sneakPeek.show) { _, sneakPeekShowing in
                 // When sneak peek finishes, check if user is still hovering and open notch if needed
                 if !sneakPeekShowing {
@@ -2065,8 +2094,9 @@ struct ContentView: View {
                         }
 
                         vm.dropEvent = false
-                        // Leaving a drop target must not close the notch. The user
-                        // explicitly closes it with an outside click.
+                        if !shouldPreventAutoClose() {
+                            vm.close()
+                        }
                     }
                 }
         } else {
@@ -2419,10 +2449,14 @@ struct ContentView: View {
             isHovering = false
         }
 
-        if vm.notchState == .open {
-            // The island is hover-driven: leaving its active area returns it
-            // to the compact state immediately instead of waiting for a click.
+        if vm.notchState == .open && !shouldPreventAutoClose() {
             vm.close()
+        } else if vm.notchState == .open
+                    && Defaults[.terminalStickyMode]
+                    && coordinator.currentView == .terminal {
+            // Re-sync monitor state through one code path to avoid
+            // monitor lifecycle races between hover and state updates.
+            syncStickyTerminalOutsideClickMonitor()
         }
     }
 

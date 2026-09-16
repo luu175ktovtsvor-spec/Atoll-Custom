@@ -1060,6 +1060,7 @@ struct NoteEditorView: View {
 
     @EnvironmentObject var vm: DynamicIslandViewModel
     private var suppressionToken = UUID()
+    @State private var autoCloseToken = UUID()
     @State private var isSuppressing = false
 
     var body: some View {
@@ -1230,11 +1231,16 @@ struct NoteEditorView: View {
         }
         .onDisappear {
             updateSuppression(for: false)
+            vm.setAutoCloseSuppression(false, token: autoCloseToken)
         }
         .onAppear {
             if isNew {
                 isContentFocused = true
             }
+            // Editing is an explicit, stateful interaction. Keep the notch
+            // available while the editor is visible, even if the pointer
+            // temporarily leaves the notch window to consult another app.
+            vm.setAutoCloseSuppression(true, token: autoCloseToken)
         }
     }
 

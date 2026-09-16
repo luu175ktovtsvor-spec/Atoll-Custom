@@ -449,7 +449,11 @@ struct DynamicIslandBatteryView: View {
     }
 
     private func updateBatteryPopoverActiveState() {
-        vm.isBatteryPopoverActive = showPopupMenu && isHoveringPopover
+        // Presentation is the source of truth. Requiring the pointer to have
+        // entered the separate popover window creates a transition race: the
+        // notch can receive hover-exit before the popover's first hover event
+        // and close while the user is moving into the white panel.
+        vm.isBatteryPopoverActive = showPopupMenu
     }
 }
 
