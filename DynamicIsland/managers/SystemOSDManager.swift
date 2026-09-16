@@ -245,7 +245,6 @@ class SystemOSDManager {
             }
 
             guard isCurrentTransition(generation, active: true) else { return }
-            guard isCurrentTransition(generation, active: true) else { return }
             terminateOSDUIHelper()
             suppressionState.withLock { $0.lastSuspendedPID = -1 }
 
@@ -264,9 +263,6 @@ class SystemOSDManager {
                 return
             }
 
-            if let pid = osduiHelperPID() {
-                suppressionState.withLock { $0.lastSuspendedPID = pid }
-            }
         }
     }
     
@@ -274,17 +270,12 @@ class SystemOSDManager {
         guard isCurrentTransition(generation, active: true) else { return }
 
         do {
-            // Freeze whatever is already running, first and synchronously.
+            // Terminate whatever is already running, first and synchronously.
             //
-            // The kickstart below carries `-k`, which kills the current helper
-            // and starts a live replacement — and every millisecond between the
-            // two is a window where the native HUD draws. That was tolerable
-            // when suppression ran once at startup, but lock-state changes now
-            // re-run it, so the window reopened on every unlock and the native
-            // HUD reappeared on the home screen. A helper that is already
-            // SIGSTOPped needs no replacing; freezing it in place closes the
-            // window entirely, and the watcher still catches any process macOS
-            // swaps in later.
+            // A running helper may already own a visible HUD. Killing it closes
+            // that window; the watcher still catches any process macOS swaps in
+            // later. If there is no helper, the kickstart below creates an idle
+            // instance that can safely be suspended before the next key event.
             if let existing = osduiHelperPID() {
                 // Do not freeze a helper that may already own a visible HUD.
                 // Killing it dismisses the window and avoids leaving a stuck
