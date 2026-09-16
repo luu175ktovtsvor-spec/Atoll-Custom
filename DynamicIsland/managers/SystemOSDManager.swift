@@ -225,9 +225,11 @@ class SystemOSDManager {
         startSuppressionWatcher()
     }
 
-    /// Immediately SIGSTOPs OSDUIHelper, bypassing the 150ms watcher poll. The
-    /// CoreAudio volume write wakes/respawns the helper to draw the native OSD
-    /// (brightness's private APIs never do), and the watcher can lose that race.
+    /// Immediately dismisses OSDUIHelper, bypassing the 150ms watcher poll. A
+    /// SIGSTOP is not safe here: if the helper has already created the native
+    /// volume window, freezing the process freezes that window on screen too.
+    /// Terminating the helper closes any current window; the suppression
+    /// watcher catches the replacement that launchd may create afterwards.
     /// No-op unless suppression is active.
     public static func suppressNativeOSDNow() {
         let generation = suppressionState.withLock { state -> UInt64? in
@@ -251,10 +253,19 @@ class SystemOSDManager {
             }
 
             guard isCurrentTransition(generation, active: true) else { return }
-            suspendOSDUIHelper()
+            terminateOSDUIHelper()
+            suppressionState.withLock { $0.lastSuspendedPID = -1 }
 
-            // If this transition went stale while the SIGSTOP was in flight,
-            // hand the helper over rather than assuming it should be resumed.
+            // CoreAudio can respawn OSDUIHelper just after the volume write.
+            // Give that replacement a short window to appear, then dismiss it
+            // as well so a native HUD can never be left frozen by the watcher.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard isCurrentTransition(generation, active: true) else { return }
+            terminateOSDUIHelper()
+            suppressionState.withLock { $0.lastSuspendedPID = -1 }
+
+            // If ownership changed while the delayed dismissal was in flight,
+            // hand the helper over to the current transition.
             guard isCurrentTransition(generation, active: true) else {
                 relinquishStaleSuspension()
                 return
@@ -282,14 +293,17 @@ class SystemOSDManager {
             // window entirely, and the watcher still catches any process macOS
             // swaps in later.
             if let existing = osduiHelperPID() {
-                suspendOSDUIHelper()
+                // Do not freeze a helper that may already own a visible HUD.
+                // Killing it dismisses the window and avoids leaving a stuck
+                // volume indicator when Atoll takes ownership.
+                terminateOSDUIHelper()
                 guard isCurrentTransition(generation, active: true) else {
                     relinquishStaleSuspension()
                     return
                 }
-                suppressionState.withLock { $0.lastSuspendedPID = existing }
+                suppressionState.withLock { $0.lastSuspendedPID = -1 }
                 await MainActor.run {
-                    print("✅ System HUD disabled (suspended running helper \(existing))")
+                    print("✅ System HUD disabled (terminated running helper \(existing))")
                 }
                 return
             }
@@ -487,6 +501,21 @@ class SystemOSDManager {
     }
 
     private static let helperProcessName = "OSDUIHelper"
+
+    /// Terminates OSDUIHelper so any native HUD window is dismissed. launchd
+    /// owns the service and will start a fresh helper when macOS needs it.
+    private static func terminateOSDUIHelper() {
+        let terminate = Process()
+        terminate.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        terminate.arguments = ["-9", "OSDUIHelper"]
+        terminate.standardError = Pipe()
+        do {
+            try terminate.run()
+            terminate.waitUntilExit()
+        } catch {
+            NSLog("Suppression watcher: failed to terminate OSDUIHelper: \(error)")
+        }
+    }
 
     /// Sends SIGSTOP to all OSDUIHelper processes. Idempotent.
     private static func suspendOSDUIHelper() {
