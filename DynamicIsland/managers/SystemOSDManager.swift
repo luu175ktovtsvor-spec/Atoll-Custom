@@ -245,13 +245,6 @@ class SystemOSDManager {
             }
 
             guard isCurrentTransition(generation, active: true) else { return }
-            if let pid = osduiHelperPID() {
-                let lastPID = suppressionState.withLock { $0.lastSuspendedPID }
-                if pid == lastPID {
-                    return
-                }
-            }
-
             guard isCurrentTransition(generation, active: true) else { return }
             terminateOSDUIHelper()
             suppressionState.withLock { $0.lastSuspendedPID = -1 }
