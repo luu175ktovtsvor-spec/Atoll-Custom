@@ -394,7 +394,11 @@ class SystemOSDManager {
                 let lastPID = suppressionState.withLock { $0.lastSuspendedPID }
 
                 if let pid = currentPID, pid != lastPID {
-                    suspendOSDUIHelper()
+                    // Never SIGSTOP a helper that may already own a visible
+                    // native HUD. A stopped process leaves that window frozen
+                    // on screen. Termination dismisses it cleanly; launchd
+                    // will provide a fresh helper for the next event.
+                    terminateOSDUIHelper()
                     suppressionState.withLock { $0.lastSuspendedPID = pid }
                     stableChecks = 0
                     try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
@@ -501,18 +505,11 @@ class SystemOSDManager {
         }
     }
 
-    /// Sends SIGSTOP to all OSDUIHelper processes. Idempotent.
+    /// Legacy helper retained for compatibility with stale callers. Native
+    /// HUD suppression must terminate the helper instead of stopping it,
+    /// because SIGSTOP leaves an already visible HUD frozen on screen.
     private static func suspendOSDUIHelper() {
-        let stop = Process()
-        stop.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        stop.arguments = ["-STOP", "OSDUIHelper"]
-        stop.standardError = Pipe() // silence "no such process" stderr
-        do {
-            try stop.run()
-            stop.waitUntilExit()
-        } catch {
-            NSLog("Suppression watcher: failed to SIGSTOP OSDUIHelper: \(error)")
-        }
+        terminateOSDUIHelper()
     }
 
     /// Undoes a SIGSTOP this transition just issued, having discovered it is
